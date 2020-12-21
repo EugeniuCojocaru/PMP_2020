@@ -25,15 +25,9 @@ Keypad keypad = Keypad(makeKeymap(keys), rowPins, colPins, ROWS, COLS);
 
 /////////////////////////////////////////////////////////////// SOFTWARE ///////////////////////////////////////////////////////////////
 // stari
-enum stateT {idle, nextLevel, level, gameOver, victory};
-boolean inUse=false;
+enum stateT {idle, nextLevel, play, gameOver, victory};
+boolean inUse = false;
 stateT state = idle;
-
-//culori
-struct RGB {
-  short r, g, b;
-};
-RGB bgColor, enemyColor, enemyBulletColor, aircraftColor, aircraftBulletColor;
 
 //vector de gloante
 const byte maxBullet = 50;
@@ -44,15 +38,15 @@ byte bulletCounter = 0;
 const byte maxEnemy = 30;
 Point enemy[maxEnemy];
 byte enemyCounter = 0;
-byte enemyAlive;
+byte enemyAlive = 0;
 Point enemyBullet[maxBullet];
 byte enemyBulletCounter = 0;
 
 //temporizare
 Metro shootT = Metro(1000);
 Metro projectileMoveT = Metro(100);
-Metro enemyShootT = Metro(750);
-Metro enemyProjectileMoveT = Metro(75);
+Metro enemyShootT = Metro(1500);
+Metro enemyProjectileMoveT = Metro(100);
 Metro enemyBodyMoveT = Metro(750);
 
 /////////////////////////////////////////////////////////////// VARIABILE AFISAJ ///////////////////////////////////////////////////////////////
@@ -64,57 +58,58 @@ const byte enemyHeight = 5;
 const byte enemyWidth = 6;
 
 // variabile
-int16_t xNow = 64;
-int16_t yNow = 150;
+byte xNow = 64;
+byte yNow = 150;
 byte currentLevel = 1;
-
-//start game
-boolean start = false;
-//boolean nextLevel = false;
-//boolean gameOver = false;
-
 
 void setup() {
   Serial.begin(9600);
   tft.initR(INITR_BLACKTAB);
-
-  //  tft.fillScreen(ST7735_BLACK);
-  //
-  //  //delay(2000);
-  //  drawAircraft(xNow, yNow, ST7735_WHITE);
-  //  spawnEnemies(currentLevel);
-
-
-
 }
 
 void loop() {
-  
   char key = keypad.getKey();
-  
   if (key) {
     switch (key) {
-      case '4': moveLeft(); break;
-      case '6': moveRight(); break;
-      case '1': start = !start; break;
+      case '4': if (state == play) moveLeft(); break;
+      case '6': if (state == play) moveRight(); break;
+      case '1': if (state == idle) {
+          state = nextLevel;
+          inUse = false;
+        } break;
       default: Serial.println("DK which button you pressed");
     }
   }
-  
+
+
   switch (state) {
     case idle:
-      if(inUse == false){
+      if (inUse == false) {
         startMenu();
-        inUse=!inUse; 
+        inUse = true;
       }
       break;
+
     case nextLevel:
-      nextLevelAnimation();
-      state = level;
+      nextLevelAnimation(currentLevel);
+      state = play;
+      if (currentLevel > 1)
+        inUse = false;
+
       break;
-    case level:
-      spawnEnemies(currentLevel);
+
+    case play:
+      if (inUse == false) {
+        Serial.println(currentLevel);
+        inUse = true;
+        tft.fillScreen(ST7735_WHITE);
+        spawnEnemies(currentLevel);
+        xNow = 64;
+        yNow = 150;
+        drawAircraft(xNow, yNow, ST7735_BLACK, 0);
+      }
       break;
+
     case gameOver:
       GAMEOVER();
       state = idle;
@@ -126,178 +121,257 @@ void loop() {
     default: break;
   }
 
-  //  if (shootT.check()) {
-  //    shoot();
-  //  }
-  //  if (projectileMoveT.check()) {
-  //    projectileMove();
-  //  }
-  //  if (enemyShootT.check()) {
-  //    enemyShoot();
-  //  }
-  //  if (enemyProjectileMoveT.check()) {
-  //    enemyProjectileMove();
-  //  }
-  //  if (enemyBodyMoveT.check()) {
-  //    enemyBodyMove();
-  //  }
+  if (shootT.check() && state == play) {
+    shoot();
+  }
+  if (projectileMoveT.check() && state == play) {
+    projectileMove();
+  }
+  if (enemyShootT.check() && state == play) {
+    enemyShoot();
+  }
+  if (enemyProjectileMoveT.check() && state == play) {
+    enemyProjectileMove();
+  }
+  if (enemyBodyMoveT.check() && state == play) {
+    enemyBodyMove();
+  }
+
 }
 
 /////////////////////////////////////////////////////////////// AFISAJ TFT ///////////////////////////////////////////////////////////////
 void startMenu() {
-  tft.fillScreen(tft.color565(38, 188, 201));
+  tft.fillScreen(ST7735_BLACK);
   tft.setCursor(10, 20);
   tft.setTextSize(2);
-  tft.setTextColor(tft.color565(12, 7, 166));
+  tft.setTextColor(ST7735_YELLOW);
   tft.setTextWrap(true);
   tft.print("  SPACE    INVADER");
 
-  tft.setCursor(10,80);
+  tft.setCursor(10, 80);
   tft.setTextSize(1);
   tft.print("To start the game        press '1' ");
 
-  tft.setCursor(10,140);
+  tft.setCursor(10, 140);
   tft.print("by Cojocaru Eugeniu");
 }
 
-void nextLevelAnimation() {
-
+void nextLevelAnimation(byte level) {
+  tft.fillScreen(ST7735_WHITE);
+  tft.setCursor(0, 20);
+  tft.setTextSize(2);
+  tft.setTextColor(ST7735_BLUE);
+  tft.setTextWrap(true);
+  tft.print("   LEVEL       ");
+  tft.print(level);
+  yNow = 150;
+  while (yNow > 0)
+  {
+    drawAircraft(xNow, yNow, ST7735_YELLOW, 1);
+    yNow -= 2;
+    drawAircraft(xNow, yNow, ST7735_BLACK, 0);
+    delay(30);
+  }
+  drawAircraft(xNow, yNow, ST7735_YELLOW, 1);
 }
 
 void GAMEOVER() {
   tft.fillScreen(ST7735_BLACK);
   tft.setCursor(10, 50);
   tft.setTextSize(2);
-  tft.setTextColor(ST7735_CYAN);
+  tft.setTextColor(ST7735_YELLOW);
   tft.setTextWrap(true);
   tft.print("GAME OVER");
-  drawAircraft(xNow, yNow, ST7735_CYAN);
+  tft.setCursor(10, 90);
+  tft.setTextSize(1);
+  tft.print("Press '1' to retry");
+  drawAircraft(xNow, yNow, ST7735_WHITE, 0);
+  RESET(1);
 }
 
 void VICTORY() {
-
+  tft.fillScreen(ST7735_BLACK);
+  tft.setCursor(10, 50);
+  tft.setTextSize(2);
+  tft.setTextColor(ST7735_YELLOW);
+  tft.setTextWrap(true);
+  tft.print(" VICTORY!");
+  tft.setCursor(10, 90);
+  tft.setTextSize(1);
+  tft.print("  To play again          press '1'");
+  drawAircraft(xNow, yNow, ST7735_WHITE, 0);
+  RESET(1);
 }
-void selectColor(byte level) {
-  switch (level) {
-    case 1:
-      bgColor.r = 255;
-      bgColor.g = 255;
-      bgColor.b = 255;
 
-      enemyColor.r = 0;
-      enemyColor.g = 0;
-      enemyColor.b = 0;
-
-      enemyBulletColor.r = 247;
-      enemyBulletColor.r = 32;
-      enemyBulletColor.r = 12;
-
-      aircraftColor.r = 0;
-      aircraftColor.r = 0;
-      aircraftColor.r = 0;
-
-      aircraftBulletColor.r = 0;
-      aircraftBulletColor.r = 21;
-      aircraftBulletColor.r = 255;
-
-    //    case 2:
-    //    case 3:
-    //    case 4:
-    //    case 5:
-    default: break;
-  }
-}
 void moveLeft() {
-  Serial.println("move left");
-  drawAircraft(xNow, yNow, ST7735_BLACK);
+  drawAircraft(xNow, yNow, ST7735_WHITE, 1);
   if (xNow - moveDistance < 0) {
     xNow = 128;
   }
   xNow -= moveDistance;
-  drawAircraft(xNow, yNow, ST7735_WHITE);
+  drawAircraft(xNow, yNow, ST7735_BLACK, 0);
 }
 
 void moveRight() {
-  Serial.println("move right");
-  drawAircraft(xNow, yNow, ST7735_BLACK);
+  drawAircraft(xNow, yNow, ST7735_WHITE, 1);
   if (xNow + moveDistance > 128) {
     xNow = 0;
   }
   xNow += moveDistance;
-  drawAircraft(xNow, yNow, ST7735_WHITE);
+  drawAircraft(xNow, yNow, ST7735_BLACK, 0);
 }
 
-void drawAircraft(uint16_t x, uint16_t y, uint16_t color) {
-
+void drawAircraft(byte x, byte y, uint16_t color, byte flag) {
+  uint16_t color1 = ST7735_CYAN;
+  uint16_t color2 = ST7735_YELLOW;
+  if (flag == 1) {
+    color2 = color;
+    color1 = color;
+  }
+  tft.drawPixel(x, y - 8, color1); //yNow-8
+  tft.drawPixel(x, y - 7, color2); //yNow-7
+  tft.drawPixel(x, y - 6, color); //yNow-6
+  tft.drawPixel(x - 1, y - 5, color);
+  tft.drawPixel(x, y - 5, color); //yNow-5
+  tft.drawPixel(x + 1, y - 5, color);
   tft.drawPixel(x - 1, y - 4, color);
+  tft.drawPixel(x, y - 4, color); //yNow-4
   tft.drawPixel(x + 1, y - 4, color);
-
+  tft.drawPixel(x - 4, y - 3, color1);
   tft.drawPixel(x - 1, y - 3, color);
-  tft.drawPixel(x, y - 3, color);
+  tft.drawPixel(x, y - 3, color); //yNow -3
   tft.drawPixel(x + 1, y - 3, color);
-
-  tft.drawPixel(x - 4, y - 2, color);
-  tft.drawPixel(x - 3, y - 2, color);
-  tft.drawPixel(x - 2, y - 2, color);
+  tft.drawPixel(x + 4, y - 3, color1);
+  tft.drawPixel(x - 4, y - 2, color2);
   tft.drawPixel(x - 1, y - 2, color);
-  tft.drawPixel(x, y - 2, color);
+  tft.drawPixel(x, y - 2, color); //yNow -2
   tft.drawPixel(x + 1, y - 2, color);
-  tft.drawPixel(x + 2, y - 2, color);
-  tft.drawPixel(x + 3, y - 2, color);
-  tft.drawPixel(x + 4, y - 2, color);
-
-  tft.drawPixel(x - 3, y - 1, color);
+  tft.drawPixel(x + 4, y - 2, color2);
+  tft.drawPixel(x - 4, y - 1, color);
   tft.drawPixel(x - 2, y - 1, color);
   tft.drawPixel(x - 1, y - 1, color);
-  tft.drawPixel(x, y - 1, color);
+  tft.drawPixel(x, y - 1, color); //yNow-1
   tft.drawPixel(x + 1, y - 1, color);
   tft.drawPixel(x + 2, y - 1, color);
-  tft.drawPixel(x + 3, y - 1, color);
-
+  tft.drawPixel(x + 4, y - 1, color);
+  tft.drawPixel(x - 7, y, color2);
+  tft.drawPixel(x - 4, y, color);
+  tft.drawPixel(x - 3, y, color2);
   tft.drawPixel(x - 2, y, color);
   tft.drawPixel(x - 1, y, color);
-  tft.drawPixel(x, y, color);
+  tft.drawPixel(x, y, color2); //yNow
   tft.drawPixel(x + 1, y, color);
   tft.drawPixel(x + 2, y, color);
-
-  tft.drawPixel(x - 1, y + 1, color);
-  tft.drawPixel(x, y + 1, color);
-  tft.drawPixel(x + 1, y + 1, color);
-
-  tft.drawPixel(x, y + 2, color);
-  tft.drawPixel(x , y + 3, color);
-  tft.drawPixel(x, y + 4, color);
+  tft.drawPixel(x + 3, y, color2);
+  tft.drawPixel(x + 4, y, color);
+  tft.drawPixel(x + 7, y, color2);
+  tft.drawPixel(x - 7, y + 1, color2);
+  tft.drawPixel(x - 4, y + 1, color1);
+  tft.drawPixel(x - 3, y + 1, color);
+  tft.drawPixel(x - 2, y + 1, color);
+  tft.drawPixel(x - 1, y + 1, color1);
+  tft.drawPixel(x, y + 1, color1); //yNow+1
+  tft.drawPixel(x + 1, y + 1, color1);
+  tft.drawPixel(x + 2, y + 1, color);
+  tft.drawPixel(x + 3, y + 1, color);
+  tft.drawPixel(x + 4, y + 1, color1);
+  tft.drawPixel(x + 7, y + 1, color2);
+  tft.drawPixel(x - 7, y + 2, color);
+  tft.drawPixel(x - 4, y + 2, color);
+  tft.drawPixel(x - 3, y + 2, color);
+  tft.drawPixel(x - 2, y + 2, color);
+  tft.drawPixel(x - 1, y + 2, color1);
+  tft.drawPixel(x, y + 2, color); //yNow+2
+  tft.drawPixel(x + 1, y + 2, color1);
+  tft.drawPixel(x + 2, y + 2, color);
+  tft.drawPixel(x + 3, y + 2, color);
+  tft.drawPixel(x + 4, y + 2, color);
+  tft.drawPixel(x + 7, y + 2, color);
+  tft.drawPixel(x - 7, y + 3, color);
+  tft.drawPixel(x - 5, y + 3, color);
+  tft.drawPixel(x - 4, y + 3, color);
+  tft.drawPixel(x - 3, y + 3, color);
+  tft.drawPixel(x - 2, y + 3, color);
+  tft.drawPixel(x - 1, y + 3, color);
+  tft.drawPixel(x, y + 3, color); //yNow+3
+  tft.drawPixel(x + 1, y + 3, color);
+  tft.drawPixel(x + 2, y + 3, color);
+  tft.drawPixel(x + 3, y + 3, color);
+  tft.drawPixel(x + 4, y + 3, color);
+  tft.drawPixel(x + 5, y + 3, color);
+  tft.drawPixel(x + 7, y + 3, color);
+  tft.drawPixel(x - 7, y + 4, color);
+  tft.drawPixel(x - 6, y + 4, color);
+  tft.drawPixel(x - 5, y + 4, color);
+  tft.drawPixel(x - 4, y + 4, color);
+  tft.drawPixel(x - 3, y + 4, color);
+  tft.drawPixel(x - 2, y + 4, color2);
+  tft.drawPixel(x - 1, y + 4, color);
+  tft.drawPixel(x, y + 4, color); //yNow+4
+  tft.drawPixel(x + 1, y + 4, color);
+  tft.drawPixel(x + 2, y + 4, color2);
+  tft.drawPixel(x + 3, y + 4, color);
+  tft.drawPixel(x + 4, y + 4, color);
+  tft.drawPixel(x + 5, y + 4, color);
+  tft.drawPixel(x + 6, y + 4, color);
+  tft.drawPixel(x + 7, y + 4, color);
+  tft.drawPixel(x - 7, y + 5, color);
+  tft.drawPixel(x - 6, y + 5, color);
+  tft.drawPixel(x - 5, y + 5, color);
+  tft.drawPixel(x - 3, y + 5, color2);
+  tft.drawPixel(x - 2, y + 5, color2);
+  tft.drawPixel(x - 1, y + 5, color);
+  tft.drawPixel(x, y + 5, color); //yNow+5
+  tft.drawPixel(x + 1, y + 5, color);
+  tft.drawPixel(x + 2, y + 5, color2);
+  tft.drawPixel(x + 3, y + 5, color2);
+  tft.drawPixel(x + 5, y + 5, color);
+  tft.drawPixel(x + 6, y + 5, color);
+  tft.drawPixel(x + 7, y + 5, color);
+  tft.drawPixel(x - 7, y + 6, color);
+  tft.drawPixel(x - 6, y + 6, color);
+  tft.drawPixel(x - 3, y + 6, color2);
+  tft.drawPixel(x - 2, y + 6, color1);
+  tft.drawPixel(x, y + 6, color); //yNow+6
+  tft.drawPixel(x + 2, y + 6, color1);
+  tft.drawPixel(x + 3, y + 6, color2);
+  tft.drawPixel(x + 6, y + 6, color);
+  tft.drawPixel(x + 7, y + 6, color);
+  tft.drawPixel(x - 7, y + 7, color);
+  tft.drawPixel(x - 3, y + 7, color1);
+  tft.drawPixel(x, y + 7, color); //yNow+7
+  tft.drawPixel(x + 3, y + 7, color1);
+  tft.drawPixel(x + 7, y + 7, color);
 }
 
-void drawProjectile(int16_t x, int16_t y, uint16_t color) {
+void drawProjectile(byte x, byte y, uint16_t color) {
   tft.drawCircle(x, y, projectileSize, color);
   tft.fillCircle(x, y, projectileSize, color);
 }
-void drawEnemy(int16_t x, int16_t y, int16_t width, int16_t height, uint16_t color) {
+
+void drawEnemy(byte x, byte y, byte width, byte height, uint16_t color) {
   tft.drawRect(x, y, width, height, color);
   tft.fillRect(x, y, width, height, color);
 }
 
 void drawEnemies() {
-  for (int i = 0 ; i < enemyCounter; i++) {
+  for (byte i = 0 ; i < enemyCounter; i++) {
     if (enemy[i].id == 0) {
-      tft.drawRect(enemy[i].x, enemy[i].y, enemyWidth, enemyHeight, ST7735_BLACK);
-      tft.fillRect(enemy[i].x, enemy[i].y, enemyWidth, enemyHeight, ST7735_BLACK);
+      tft.drawRect(enemy[i].x, enemy[i].y, enemyWidth, enemyHeight, ST7735_WHITE);
+      tft.fillRect(enemy[i].x, enemy[i].y, enemyWidth, enemyHeight, ST7735_WHITE);
       enemy[i].id = -1;
     }
   }
 }
 
-
-
 /////////////////////////////////////////////////////////////// GLOANTE PLAYER FUNCTIONALITATI ///////////////////////////////////////////////////////////////
 int validMove(Point bullet) {
   if (bullet.y > 0) { // este inca in mapa
-    for (int i = 0; i < enemyCounter; i++) {
+    for (byte i = 0; i < enemyCounter; i++) {
       if (enemy[i].id != 0 && enemy[i].id != -1) { // daca inca este desenat inamicul
         if (bullet.y >= enemy[i].y && ( bullet.y <= enemy[i].y + enemyHeight) && bullet.x + 1 >= enemy[i].x && ( bullet.x - 1 <= enemy[i].x + enemyWidth)) {
-          Serial.println("am ajuns!");
           enemy[i].id = 0;
+          enemyAlive--;
           return 2; //s-a eliminat un inamic
         }
       }
@@ -309,43 +383,56 @@ int validMove(Point bullet) {
 }
 
 void shoot() {
-  Point bullet = Point(bulletCounter, xNow, yNow - moveDistance - 3);
+  Point bullet = Point(bulletCounter, xNow, yNow - 10);
   Add(bullet, 0);
 }
 
 void projectileMove() {
-  for (short i = 0; i < bulletCounter; i++)
+  for (byte i = 0; i < bulletCounter; i++)
   {
-    int state = validMove(bullet[i]);
-    if (state == 0) {
-      drawProjectile(bullet[i].x, bullet[i].y, ST7735_BLACK);
+    byte stateP = validMove(bullet[i]);
+    if (stateP == 0) {
+      drawProjectile(bullet[i].x, bullet[i].y, ST7735_WHITE);
       bullet[i].y -= moveDistance;
-      drawProjectile(bullet[i].x, bullet[i].y, ST7735_GREEN);
+      drawProjectile(bullet[i].x, bullet[i].y, ST7735_BLUE);
     }
-    if (state == 1) {
-      drawProjectile(bullet[i].x, bullet[i].y, ST7735_BLACK);
+    if (stateP == 1) {
+      drawProjectile(bullet[i].x, bullet[i].y, ST7735_WHITE);
       Remove(bullet[i], 0);
       i--;
     }
-    if (state == 2) {
-      drawProjectile(bullet[i].x, bullet[i].y, ST7735_BLACK);
+    if (stateP == 2) {
+      drawProjectile(bullet[i].x, bullet[i].y, ST7735_WHITE);
       Remove(bullet[i], 0);
       i--;
       drawEnemies();
+      if (enemyAlive == 0)
+      {
+        if (currentLevel == 5) {
+          RESET(1);
+          state = victory;
+        }
+        else {
+          RESET(0);
+          currentLevel++;
+          state = nextLevel;
+        }
+      }
     }
   }
 }
 
 /////////////////////////////////////////////////////////////// INAMICI FUNCTIONALITATE ///////////////////////////////////////////////////////////////
-void spawnEnemies(int level) {
-  int posX = 6;
-  int posY = 6;
+void spawnEnemies(byte level) {
+  byte posX = 6;
+  byte posY = 6;
   byte numberEnemy = level * 6;
+  enemyAlive = numberEnemy;
   byte xPosition = 0;
-  byte id = 0;
-  for (int i = 0 ; i < numberEnemy; i++) {
-    int chance = 1 + rand() % 10;
-    if (chance <= 5) {
+  byte id = 0; // imi spune daca inamicul se spawneaza mai in stanga sau mia in dreapta
+  for (byte i = 0 ; i < numberEnemy; i++) {
+    byte chance = 1 + rand() % 10;
+    if (chance <= 5) { //////////////////////////////////////////////////////////////////////////////// poti da id-ul sa fie random ca sa se spawneze si mai diferit
       id = 10;
       xPosition = 0;
     }
@@ -355,17 +442,37 @@ void spawnEnemies(int level) {
     }
     Point newEnemy = Point(id, posX + xPosition + (i % 6) * 20, posY + (i / 6) * (enemyHeight + 4));
     Add(newEnemy, 1);
-    tft.drawRect(newEnemy.x, newEnemy.y, enemyWidth, enemyHeight, ST7735_WHITE);
-    tft.fillRect(newEnemy.x, newEnemy.y, enemyWidth, enemyHeight, ST7735_WHITE);
+    tft.drawRect(newEnemy.x, newEnemy.y, enemyWidth, enemyHeight, ST7735_BLACK);
+    tft.fillRect(newEnemy.x, newEnemy.y, enemyWidth, enemyHeight, ST7735_BLACK);
   }
 }
 
 int enemyBulletValidMove(Point bullet) {
   if (bullet.y < 160) { // este inca in mapa
-    short bulletY = bullet.y + moveDistance;
-    if (bullet.y >= yNow - moveDistance && bulletY <= yNow + moveDistance  && bullet.x >= xNow - moveDistance && bullet.x <= xNow + moveDistance) {
-      Serial.println("GAME OVER!");
-      return 2; //GAME OVER
+    if (bullet.y == yNow - 8 || bullet.y == yNow - 7 || bullet.y == yNow - 6) {
+      if (bullet.x == xNow || bullet.x - 1 == xNow || bullet.x + 1 == xNow) {
+        Serial.println("GAME OVER!");
+        return 2;
+      }
+    }
+    if (bullet.y == yNow - 5 || bullet.y == yNow - 4) {
+      if (bullet.x - 1 >= xNow - 1 && bullet.x + 1 <= xNow + 1) {
+        Serial.println("GAME OVER!");
+        return 2;
+      }
+    }
+    if (bullet.y == yNow - 3 || bullet.y == yNow - 2 || bullet.y == yNow - 1) {
+      if (bullet.x - 1 >= xNow - 4 && bullet.x + 1 <= xNow + 4) {
+        Serial.println("GAME OVER!");
+        return 2;
+      }
+    }
+
+    if (bullet.y >= yNow && bullet.y <= yNow + 7) {
+      if (bullet.x - 1 >= xNow - 7 && bullet.x + 1 <= xNow + 7) {
+        Serial.println("GAME OVER!");
+        return 2;
+      }
     }
     return 0; // miscare valida inca in mapa
   }
@@ -374,12 +481,12 @@ int enemyBulletValidMove(Point bullet) {
 }
 
 void enemyShoot() {
-  for (int i = 0; i < maxEnemy; i++) {
+  for (byte i = 0; i < maxEnemy; i++) {
     if (enemy[i].id != 0 && enemy[i].id != -1 ) {
       byte chance = 1 + (rand() % 10); // sansa 50/50 de a trage un glont
       if (chance % 2 == 0) {
         chance = 1 + (rand() % enemyWidth); // pozitia de unde sa porneasca glontul
-        Point bullet = Point(enemyBulletCounter, enemy[i].x + chance, enemy[i].y + moveDistance); /////HARDCODED
+        Point bullet = Point(enemyBulletCounter, enemy[i].x + chance, enemy[i].y + moveDistance + 1); /////HARDCODED
         Add(bullet, 2);
       }
     }
@@ -387,24 +494,24 @@ void enemyShoot() {
 }
 
 void enemyProjectileMove() {
-  for (short i = 0; i < enemyBulletCounter; i++)
+  for (byte i = 0; i < enemyBulletCounter; i++)
   {
-    int state = enemyBulletValidMove(enemyBullet[i]);
-    if (state == 0) {
-      drawProjectile(enemyBullet[i].x, enemyBullet[i].y, ST7735_BLACK);
+    byte stateE = enemyBulletValidMove(enemyBullet[i]);
+    if (stateE == 0) {
+      drawProjectile(enemyBullet[i].x, enemyBullet[i].y, ST7735_WHITE);
       enemyBullet[i].y += moveDistance;
       drawProjectile(enemyBullet[i].x, enemyBullet[i].y, ST7735_RED);
     }
-    if (state == 1) {
-      drawProjectile(enemyBullet[i].x, enemyBullet[i].y, ST7735_BLACK);
+    if (stateE == 1) {
+      drawProjectile(enemyBullet[i].x, enemyBullet[i].y, ST7735_WHITE);
       Remove(enemyBullet[i], 1);
       i--;
     }
-    if (state == 2) {
-      //gameOver = true;
+    if (stateE == 2) {
       Remove(enemyBullet[i], 1);
       i--;
-      //GAMEOVER();
+      state = gameOver;
+
     }
   }
 }
@@ -414,31 +521,30 @@ int enemyValidMove(Point enemyBody) {
   if (enemyBody.id >= 15 && enemyBody.id < 20)
     return 1;
   if ( enemyBody.id == 20) {
-    enemyBody.id = 10;
     return 2;
   }
 }
 void enemyBodyMove() {
-  for (int i = 0; i < enemyCounter; i++) {
+  for (byte i = 0; i < enemyCounter; i++) {
     if (enemy[i].id != 0 && enemy[i].id != -1) {
-      int state = enemyValidMove(enemy[i]);
+      byte state = enemyValidMove(enemy[i]);
       switch (state) {
         case 0:
-          drawEnemy(enemy[i].x, enemy[i].y, enemyWidth, enemyHeight, ST7735_BLACK);
-          enemy[i].x += enemyMoveDistance;
           drawEnemy(enemy[i].x, enemy[i].y, enemyWidth, enemyHeight, ST7735_WHITE);
+          enemy[i].x += enemyMoveDistance;
+          drawEnemy(enemy[i].x, enemy[i].y, enemyWidth, enemyHeight, ST7735_BLACK);
           enemy[i].id++;
           break;
         case 1:
-          drawEnemy(enemy[i].x, enemy[i].y, enemyWidth, enemyHeight, ST7735_BLACK);
-          enemy[i].x -= enemyMoveDistance;
           drawEnemy(enemy[i].x, enemy[i].y, enemyWidth, enemyHeight, ST7735_WHITE);
+          enemy[i].x -= enemyMoveDistance;
+          drawEnemy(enemy[i].x, enemy[i].y, enemyWidth, enemyHeight, ST7735_BLACK);
           enemy[i].id++;
           break;
         case 2:
-          drawEnemy(enemy[i].x, enemy[i].y, enemyWidth, enemyHeight, ST7735_BLACK);
-          enemy[i].x += enemyMoveDistance;
           drawEnemy(enemy[i].x, enemy[i].y, enemyWidth, enemyHeight, ST7735_WHITE);
+          enemy[i].x += enemyMoveDistance;
+          drawEnemy(enemy[i].x, enemy[i].y, enemyWidth, enemyHeight, ST7735_BLACK);
           enemy[i].id = 11;
           break;
       }
@@ -451,7 +557,7 @@ void enemyBodyMove() {
 void Remove(Point mybullet, byte vector) {
 
   if (vector == 0) {
-    for (short i = mybullet.id; i < maxBullet - 1; i++) {
+    for (byte i = mybullet.id; i < maxBullet - 1; i++) {
       bullet[i] = bullet[i + 1];
       bullet[i].id = i;
     }
@@ -459,7 +565,7 @@ void Remove(Point mybullet, byte vector) {
   }
   else {
     if (vector == 1) {
-      for (short i = mybullet.id; i < maxBullet - 1; i++) {
+      for (byte i = mybullet.id; i < maxBullet - 1; i++) {
         enemyBullet[i] = enemyBullet[i + 1];
         enemyBullet[i].id = i;
       }
@@ -472,7 +578,7 @@ void Remove(Point mybullet, byte vector) {
    point= punctul de adaugat
    flag= factorul de decizie: 0=bullet/1=enemy/2=enemyBullet
 */
-void Add(Point point, short flag) {
+void Add(Point point, byte flag) {
   if (flag == 0) {
     if (bulletCounter < maxBullet) {
       bullet[bulletCounter++] = point;
@@ -494,14 +600,10 @@ void Add(Point point, short flag) {
   }
 }
 /////////////////////////////////////////////////////////////// RESET ///////////////////////////////////////////////////////////////
-void RESET() {
+void RESET(byte flag) {//flag==1 reset total, 0 pentru alt level
   enemyCounter = 0;
   enemyBulletCounter = 0;
   bulletCounter = 0;
-
-  tft.fillScreen(ST7735_BLACK);
-
-
-
-
+  if (flag == 1)
+    currentLevel = 1;
 }
